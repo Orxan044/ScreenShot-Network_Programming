@@ -9,126 +9,92 @@ namespace Client;
 
 public partial class MainWindow : Window
 {
-
-    public BitmapImage PhotoSource
-    {
-        get { return (BitmapImage)GetValue(PhotoSourceProperty); }
-        set { SetValue(PhotoSourceProperty, value); }
-    }
-
-    public Dispatcher Dispatcher { get; set; } = Dispatcher.CurrentDispatcher;
-
-    public static readonly DependencyProperty PhotoSourceProperty =
-        DependencyProperty.Register("ImageBox", typeof(BitmapImage), typeof(MainWindow));
-
-    public UdpClient server = new();
-    public IPEndPoint connectEp = new(IPAddress.Loopback, 27001); 
+    private readonly UdpClient _udpClient;
+    private readonly IPEndPoint _serverEndpoint;
+    private DispatcherTimer _timer;
 
     public MainWindow()
     {
         InitializeComponent();
+        _udpClient = new UdpClient();
+        _serverEndpoint = new IPEndPoint(IPAddress.Loopback, 27001);
     }
 
-    private void Button_Click(object sender, RoutedEventArgs e)
+    private async void Button_Click(object sender, RoutedEventArgs e)
     {
-        BtnStart.IsEnabled = false;
-        Task.Run(() => 
+        try
+        {
+            btnStart.IsEnabled = false;
+
+            _timer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(2)
+            };
+            _timer.Tick += async (s, args) => await UpdateScreenshot();
+            _timer.Start();
+
+            await UpdateScreenshot();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message);
+        }
+        finally
+        {
+            btnStart.IsEnabled = true;
+        }
+    }
+
+    private async Task UpdateScreenshot()
+    {
+        var receivedBuffer = new byte[ushort.MaxValue - 29];
+        await _udpClient.SendAsync(receivedBuffer, receivedBuffer.Length, _serverEndpoint);
+
+        var list = new List<byte>();
+        try
         {
             while (true)
             {
-                try
-                {
+                var result = await _udpClient.ReceiveAsync();
+                var receivedData = result.Buffer;
+                list.AddRange(receivedData);
 
-                    var bytes = server.Receive(ref connectEp);
-                    BitmapImage bitmapImage = new BitmapImage();
-                    bitmapImage.BeginInit();
-                    bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmapImage.StreamSource.Read(bytes);
-                    bitmapImage.EndInit();
-                    bitmapImage.Freeze();
-
-                    Dispatcher.Invoke(() => PhotoSource = bitmapImage);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(ex.Message);
-                }
-                Task.Delay(5000).Wait();
+                if (receivedData.Length < receivedBuffer.Length) break;
             }
-        
-        
-        });
+
+            try
+            {
+                var image = ByteArrayToImage([.. list]);
+                ImageBox.Source = image;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error converting byte array to image: {ex.Message}");
+                _timer.Stop();
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error receiving data: {ex.Message}");
+            _timer.Stop();
+        }
+    }
+
+    private BitmapImage ByteArrayToImage(byte[] byteArray)
+    {
+        if (byteArray == null || byteArray.Length == 0) return null;
+
+        var image = new BitmapImage();
+        using (var m = new MemoryStream(byteArray))
+        {
+            m.Position = 0;
+            image.BeginInit();
+            image.CreateOptions = BitmapCreateOptions.PreservePixelFormat;
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.StreamSource = m;
+            image.EndInit();
+        }
+        image.Freeze();
+        return image;
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-//public RelayCommand StartCommand
-//{
-//    get => new RelayCommand(() =>
-//    {
-//        Task.Run(() =>
-//        {
-//            while (true)
-//            {
-//                try
-//                {
-//                    Client = new();
-//                    Client.Connect(IpAdressEndPoint);
-//                    if (Client.Connected)
-//                    {
-//                        try
-//                        {
-//                            using (NetworkStream networkStream = Client.GetStream())
-//                            {
-//                                byte[] imageData = new byte[4096];
-//                                int bytesRead;
-//                                using (MemoryStream memoryStream = new MemoryStream())
-//                                {
-
-//                                    while ((bytesRead = networkStream.Read(imageData, 0, imageData.Length)) > 0)
-//                                    {
-//                                        memoryStream.Write(imageData, 0, bytesRead);
-//                                    }
-
-
-//                                    memoryStream.Seek(0, SeekOrigin.Begin);
-//                                    BitmapImage bitmapImage = new BitmapImage();
-//                                    bitmapImage.BeginInit();
-//                                    bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
-//                                    bitmapImage.StreamSource = memoryStream;
-//                                    bitmapImage.EndInit();
-//                                    bitmapImage.Freeze();
-
-//                                    Dispatcher.Invoke(() => PhotoSource = bitmapImage);
-//                                }
-//                            }
-//                        }
-//                        catch (Exception ex)
-//                        {
-//                            // Handle exceptions if any
-//                            MessageBox.Show("Error loading the image: " + ex.Message);
-//                        }
-//                    }
-//                }
-//                catch (Exception ex)
-//                {
-//                    MessageBox.Show(ex.Message);
-//                }
-//                Task.Delay(5000).Wait();
-//            }
-//        }
-//        );
-//    })
-//    {
-//    };
-//}
-//    }

@@ -8,7 +8,7 @@
         Title="MainWindow" Height="450" Width="800">
     <Grid>
         <Image x:Name="ImageBox" Height="350" Width="700" VerticalAlignment="Top" Margin="20" ></Image>
-        <Button x:Name="BtnStart" Background="GreenYellow" Height="30" Width="130" FontSize="20" FontWeight="Bold" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="50 20" Click="Button_Click" >Strat</Button>
+        <Button x:Name="btnStart" Background="GreenYellow" Height="30" Width="130" FontSize="20" FontWeight="Bold" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="50 10" Click="Button_Click" >Strat</Button>
 
     </Grid>
 </Window>

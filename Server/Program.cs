@@ -1,98 +1,66 @@
 ﻿using System.Net.Sockets;
 using System.Net;
 using System.Drawing;
+using System.Windows.Forms;
+using System.Drawing.Imaging;
 
-
-var server = new UdpClient(27001);
-var remoteEp = new IPEndPoint(IPAddress.Loopback, 27001);
-
-
-while (true)
+class Program
 {
-
-    try
+    static async Task Main()
     {
-        var bitmap = ScreenShot();
-        var task = Task.Run(() =>
+        using UdpClient udpServer = new(27001);
+        IPEndPoint localEndpoint = new(IPAddress.Parse("192.168.1.8"), 27001);
+        Console.WriteLine($"Server started on {localEndpoint}");
+
+        while (true)
         {
+            UdpReceiveResult result = await udpServer.ReceiveAsync();
+
             while (true)
             {
-                ImageConverter converter = new ImageConverter();
-                var bytes = (byte[])converter.ConvertTo(bitmap, typeof(byte[]))!;
-                server.Send(bytes, bytes.Length, remoteEp);
+                Bitmap screenshot = GetScreenshot();
+                byte[] imageData = ImageToByteArray(screenshot);
 
-                Console.WriteLine("Send ScreenShot");
+                if (imageData.Length / 1024f >= 1000)
+                    Console.WriteLine($"{(imageData.Length / 1024f) / 1024f} mb");
+                else
+                    Console.WriteLine($"{imageData.Length / 1024f} kb");
+
+                var chunk = imageData.Chunk(ushort.MaxValue - 29);
+                var buffer = chunk.ToArray();
+
+                for (int i = 0; i < buffer.Length; i++)
+                {
+                    await Task.Delay(30);
+                    await udpServer.SendAsync(buffer[i], buffer[i].Length, result.RemoteEndPoint);
+                }
+
+                Console.WriteLine($"Sent screenshot to {result.RemoteEndPoint}");
+                Console.WriteLine();
+
+                await Task.Delay(2000);
             }
-        });
+
+        }
     }
-    catch (Exception ex)
+
+    static Bitmap GetScreenshot()
     {
-        Console.WriteLine("Nese Alinmada");
+        Bitmap? screenshot = new Bitmap(Screen.PrimaryScreen.Bounds.Width,Screen.PrimaryScreen.Bounds.Height)!;
 
+        Graphics graphics = Graphics.FromImage(screenshot);
+        graphics.CopyFromScreen(0, 0, 0, 0, screenshot.Size);
+
+        return screenshot;
+    }
+
+    static byte[] ImageToByteArray(Image image)
+    {
+        using (MemoryStream stream = new())
+        {
+            image.Save(stream, ImageFormat.Png);
+            return stream.ToArray();
+        }
     }
 }
 
-
-Bitmap ScreenShot()
-{
-    Bitmap memoryImage;
-    memoryImage = new Bitmap(1920, 1080);
-    Size s = new Size(memoryImage.Width, memoryImage.Height);
-
-    Graphics memoryGraphics = Graphics.FromImage(memoryImage);
-
-    memoryGraphics.CopyFromScreen(0, 0, 0, 0, s);
-
-    return memoryImage;
-}
-
-
-
-
-
-
-//IPAddress iPAddress = IPAddress.Parse("192.168.100.225");
-//IPEndPoint iPEndPoint = new(iPAddress, 27001);
-
-//TcpListener listener = new(iPEndPoint);
-
-//listener.Start();
-
-//Console.WriteLine("Listening...");
-
-//while (true)
-//{
-//    var client = listener.AcceptTcpClient();
-//    Console.WriteLine($"{client.Client.LocalEndPoint} connected");
-//    Task.Run(() =>
-//    {
-
-//        while (true)
-//        {
-//            var stream = client.GetStream();
-//            var bitmap = ScreenShot();
-//            ImageConverter converter = new ImageConverter();
-//            var bytes = (byte[])converter.ConvertTo(bitmap, typeof(byte[]))!;
-//            stream.Write(bytes);
-//            Console.WriteLine("Screenshoted!");
-
-//            //Yoxlama
-
-//            Console.WriteLine($"{bytes.Length} Sent");
-//            stream.Close();
-//        }
-//    });
-//}
-
-//Bitmap ScreenShot()
-//{
-//    Bitmap memoryImage;
-//    memoryImage = new Bitmap(1920, 1080);
-//    Size s = new Size(memoryImage.Width, memoryImage.Height);
-
-//    Graphics memoryGraphics = Graphics.FromImage(memoryImage);
-
-//    memoryGraphics.CopyFromScreen(0, 0, 0, 0, s);
-
-//    return memoryImage;
-//}
